@@ -8,10 +8,12 @@ import android.graphics.SurfaceTexture;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.Nullable;
@@ -26,14 +28,22 @@ import com.google.ar.core.TrackingState;
 import com.google.ar.sceneform.AnchorNode;
 import com.google.ar.sceneform.ArSceneView;
 import com.google.ar.sceneform.FrameTime;
+import com.google.ar.sceneform.Node;
 import com.google.ar.sceneform.math.Vector3;
 import com.google.ar.sceneform.rendering.ExternalTexture;
 import com.google.ar.sceneform.rendering.ModelRenderable;
+import com.google.ar.sceneform.rendering.ViewRenderable;
 import com.google.ar.sceneform.ux.ArFragment;
 
 import java.io.Closeable;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URL;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
@@ -43,12 +53,14 @@ import java.util.function.Consumer;
 public class ArVideoFragment extends ArFragment {
 //https://developers.google.com/ar/develop/java/augmented-images/guide
     private final static String TAG = "ArVideoFragment";
-
+    private static final float VIDEO_HEIGHT_METERS = 0.85f;
     private MediaPlayer mediaPlayer;
     private ExternalTexture externalTexture;
     private ModelRenderable videoRenderable;
-    private AnchorNode videoAnchorNode;
+    private Node videoAnchorNode;
     private AugmentedImage activeAugmentedImage;
+
+    private AnchorNode anchorNode;
 
     private final static String TEST_IMAGE_1 = "test_image_1.jpg";
     private final static String TEST_IMAGE_2 = "test_image_2.jpg";
@@ -107,8 +119,11 @@ public class ArVideoFragment extends ArFragment {
             return null;
         } );
 
-        videoAnchorNode = new AnchorNode();
-        videoAnchorNode.setParent(getArSceneView().getScene());
+//        videoAnchorNode = new AnchorNode();
+        anchorNode = new AnchorNode();
+        anchorNode.setParent(getArSceneView().getScene());
+
+//        videoAnchorNode.setParent(getArSceneView().getScene());
     }
 
     @Override
@@ -130,7 +145,7 @@ public class ArVideoFragment extends ArFragment {
         try {
             InputStream it = context.getAssets().open(imageName);
             bitmap = BitmapFactory.decodeStream(it);
-            
+            it.close();
         } catch (IOException e) {
             Log.e(TAG,"loadAugmentedImageBitmap fail: "+ e.toString());
             e.printStackTrace();
@@ -140,8 +155,9 @@ public class ArVideoFragment extends ArFragment {
     
     private Boolean setupAugmentedImageDatabase(Config config, Session session){
         try {
+            //https://images.pexels.com/photos/556416/pexels-photo-556416.jpeg
             AugmentedImageDatabase database = new AugmentedImageDatabase(session);
-            database.addImage(TEST_VIDEO_1, loadAugmentedImageBitmap(TEST_IMAGE_1));
+            database.addImage(TEST_VIDEO_1, getBitmapFromImageFile());
             database.addImage(TEST_VIDEO_2, loadAugmentedImageBitmap(TEST_IMAGE_2));
             database.addImage(TEST_VIDEO_3, loadAugmentedImageBitmap(TEST_IMAGE_3));
             config.setAugmentedImageDatabase(database);
@@ -150,6 +166,30 @@ public class ArVideoFragment extends ArFragment {
             Log.e(TAG, "Could not add bitmap to augmented image database", e);
         }
         return false;
+    }
+
+    private Bitmap getBitmapFromImageFile(){
+        String imageFileName = "FILE_NAME.jpg";
+
+        FileInputStream streamIn = null;
+        Bitmap bitmap = null;
+        try {
+            File storageDir = new File(            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                    + "/YOUR_FOLDER_NAME");
+
+            File file = new File(storageDir, imageFileName); //or any other format supported
+            streamIn = new FileInputStream(file);
+            bitmap = BitmapFactory.decodeStream(streamIn); //This gets the image
+            streamIn.close();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return  bitmap;
     }
 
     @Override
@@ -186,9 +226,9 @@ public class ArVideoFragment extends ArFragment {
 
     private void dismissArVideo() {
         if(videoAnchorNode !=null){
-            if(videoAnchorNode.getAnchor() !=null){
-                videoAnchorNode.getAnchor().detach();
-            }
+//            if(videoAnchorNode.getAnchor() !=null){
+//                videoAnchorNode.getAnchor().detach();
+//            }
             videoAnchorNode.setRenderable(null);
         }
         activeAugmentedImage = null;
@@ -207,8 +247,8 @@ public class ArVideoFragment extends ArFragment {
                 if (mediaPlayer == null) {
                     // mediaPlayer null
                 }
-//                mediaPlayer.setDataSource(descriptor);
-                mediaPlayer.setDataSource("http://easyhtml5video.com/assets/video/new/Penguins_of_Madagascar.mp4");
+                mediaPlayer.setDataSource(descriptor);
+//                mediaPlayer.setDataSource("http://easyhtml5video.com/assets/video/new/Penguins_of_Madagascar.mp4");
             } catch (Throwable throwable) {
                 Log.e("ArVideoFragment", "playbackArVideo Throwable: " + throwable.toString());
                 throw throwable;
@@ -259,8 +299,11 @@ public class ArVideoFragment extends ArFragment {
             });
 
 
-            videoAnchorNode.setAnchor(augmentedImage.createAnchor(augmentedImage.getCenterPose()));
-            videoAnchorNode.setLocalScale(new Vector3(augmentedImage.getExtentX(), 1.0F, augmentedImage.getExtentZ()));
+            Vector3 localScale =new Vector3(augmentedImage.getExtentX(), 1.0F, augmentedImage.getExtentZ());
+            anchorNode.setAnchor(augmentedImage.createAnchor(augmentedImage.getCenterPose()));
+            videoAnchorNode = createVideoDisplay(anchorNode, localScale, "Text DAta, textData");
+//            videoAnchorNode.setAnchor(augmentedImage.createAnchor(augmentedImage.getCenterPose()));
+//            videoAnchorNode.setLocalScale(localScale);
             activeAugmentedImage = augmentedImage;
             Log.e("ArVideoFragment", "playbackArVideo activeAugmentedImage: " + activeAugmentedImage.getName());
             externalTexture.getSurfaceTexture().setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
@@ -286,5 +329,38 @@ public class ArVideoFragment extends ArFragment {
     public void onDestroy() {
         super.onDestroy();
         mediaPlayer.release();
+    }
+
+    private Node createVideoDisplay(final AnchorNode parent, Vector3 localScale, String title) {
+        // Create a node to render the video and add it to the anchor.
+        Node videoNode = new Node();
+        videoNode.setParent(parent);
+        videoNode.setLocalPosition(parent.getLocalPosition());
+
+        // Set the scale of the node so that the aspect ratio of the video is correct.
+        float videoWidth = mediaPlayer.getVideoWidth();
+        float videoHeight = mediaPlayer.getVideoHeight();
+//        videoNode.setLocalScale(
+//                new Vector3(
+//                        VIDEO_HEIGHT_METERS * (videoWidth / videoHeight),
+//                        VIDEO_HEIGHT_METERS, 1.0f));
+        videoNode.setLocalScale(localScale);
+
+        // Place the text above the video
+        final float videoNodeHeight = VIDEO_HEIGHT_METERS+ parent.getLocalPosition().y;
+//        final float videoNodeHeight = parent.getLocalPosition().y+ 0.85f;
+//        final float videoNodeHeight = VIDEO_HEIGHT_METERS+ localPosition.y;
+        ViewRenderable.builder().setView(getContext(),R.layout.video_title)
+                .build().thenAccept(viewRenderable -> {
+            Node titleNode =  new Node();
+            titleNode.setLocalPosition(new Vector3(0,videoNodeHeight,0));
+            titleNode.setParent(parent);
+            titleNode.setRenderable(viewRenderable);
+            ((TextView)viewRenderable.getView().findViewById(R.id.video_text))
+                    .setText(title);
+            Log.e("TEST_DATA","Set title: "+ title);
+        });
+
+        return videoNode;
     }
 }
