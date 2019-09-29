@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">My Application</string>
+    <string name="rationale_camera">This app needs access to your camera to use AR.</string>
+</resources>
